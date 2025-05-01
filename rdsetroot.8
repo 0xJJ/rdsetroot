@@ -14,7 +14,7 @@
 .\" ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
 .\" OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .\"
-.Dd $Mdocdate: April 24 2023 $
+.Dd $Mdocdate: May 1 2025 $
 .Dt RDSETROOT 8
 .Os
 .Sh NAME
@@ -56,11 +56,15 @@ If
 is not specified,
 .Nm
 writes to standard output.
-The disk can be made accessible using
-.Xr vnconfig 8 ,
-filesystems can be manipulated, and finally re-inserted into the RAMDISK kernel.
 .El
-.Sh SEE ALSO
-.Xr config 8 ,
-.Xr disklabel 8 ,
-.Xr vnconfig 8
+.Sh HISTORY
+.Nm rdsetroot
+dates back to at least to
+.Nx . The current rewrite in
+.Ox , by
+.An Sunil Nimmagadda Aq Mt sunil@openbsd.org ,
+has been ported to POSIX shell and
+.Xr readelf 1 , by
+.An Johannes Janssen Aq Mt 0xJJ@hanni.dev ,
+for use outside of
+.Ox .
