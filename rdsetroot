@@ -1,0 +1,126 @@
+#!/bin/sh
+
+# Port of OpenBSD's rdsetroot.c (1.5 2023/04/24 14:06:01 krw Exp) to
+# POSIX shell and readelf as dependency
+#
+# Copyright (c) 2019 Sunil Nimmagadda <sunil@openbsd.org>
+# Copyright (c) 2025 Johannes Janssen <0xJJ@hanni.dev>
+#
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+#
+# SPDX-License-Identifier: ISC
+
+err(){
+  >&2 echo "$@"
+  exit 1
+}
+
+usage(){
+  progname=$(basename "$0");
+  >&2 echo "usage: $progname -s kernel";
+  err      "       $progname [-dx] kernel [disk.fs]";
+}
+
+while getopts "dsx" opt; do
+  case $opt in
+    d) debug=1 ;;
+    s) sflag=1 ;;
+    x) xflag=1 ;;
+    *) usage ;;
+  esac
+done
+shift $((OPTIND-1))
+
+[ -n "$sflag" ] && { [ -n "$debug" ] || [ -n "$xflag" ] || [ $# -gt 1 ]; } && usage
+[ $# -eq 0 ] || [ $# -gt 2 ] && usage
+
+kernel="$1"; shift
+
+# Find rd_root_image and rd_root_size virtual addresses
+rd_root_image_addr=$(readelf -s "$kernel" | awk '/rd_root_image$/ {printf "0x%s", $2}')
+[ -z "$rd_root_image_addr" ] && err "no rd_root_image symbols?"
+
+rd_root_size_addr=$(readelf -s "$kernel" | awk '/rd_root_size$/ {printf "0x%s", $2}')
+[ -z "$rd_root_size_addr" ] && err "no rd_root_size symbols?";
+
+if [ -n "$debug" ]; then
+  >&2 echo "rd_root_size_addr = 0x$(printf '%x' "$rd_root_size_addr")"
+  >&2 echo "rd_root_image_addr = 0x$(printf '%x' "$rd_root_image_addr")"
+fi
+
+
+# Find LOAD segement for the virtual addresses
+tmp=$(mktemp)
+readelf -lW "$kernel" | awk '/LOAD/ { print $2, $3, $4, $5;}' > "$tmp"
+while read -r offset vaddr paddr filesz; do
+  offset=$((offset))
+  vaddr=$((vaddr))
+  paddr=$((paddr))
+  filesz=$((filesz))
+
+  adiff=$((vaddr - paddr))
+
+  size_off=$((rd_root_size_addr - paddr))
+  image_off=$((rd_root_image_addr - paddr))
+
+  [ $size_off -lt $adiff ] || [ $image_off -lt $adiff ] && continue
+
+  size_off=$((size_off-adiff))
+  image_off=$((image_off-adiff))
+
+  [ $image_off -ge $filesz ] && continue
+  [ $size_off -ge $filesz ] && err "rd_root_size not in data segment"
+
+  break
+done < "$tmp"
+
+if [ -n "$debug" ]; then
+  # >&2 echo "offset = 0x$(printf '%x' "$offset")"
+  # >&2 echo "filesz = 0x$(printf '%x' "$filesz")"
+  >&2 echo "rd_root_size_off = 0x$(printf '%x' "$size_off")"
+  >&2 echo "rd_root_image_off = 0x$(printf '%x' "$image_off")"
+fi
+
+# read rd_root_size value
+rd_root_size=$(dd if="$kernel" bs=1 skip=$((offset + size_off)) count=4 2>/dev/null | od -An -t u4 | tr -d ' ')
+[ -z "$rd_root_size" ] && err "Cannot read rd_root_size!"
+[ -n "$debug" ] && >&2 echo "rd_root_size  val: 0x$(printf '%x' "$rd_root_size")"
+
+# -s: print the size
+if [ -n "$sflag" ]; then
+    echo "$rd_root_size"
+    exit 0
+fi
+
+diskfs="$1"; shift
+# set dd arguments via $@
+[ -z "$debug" ] && set -- status=none
+
+# -x: extract the ramdisk
+if [ -n "$xflag" ]; then
+    [ -n "$diskfs" ] && set -- "$@" of="$diskfs"
+
+    dd if="$kernel" bs=1 skip=$((offset + image_off)) count="$rd_root_size" "$@"
+    exit 0
+fi
+
+# not -x: updating the ramdisk
+if [ -n "$diskfs" ]; then
+  [ ! -e "$diskfs" ] && err "File $diskfs does not exist!"
+  set -- "$@" if="$diskfs"
+
+  diskfs_size=$(wc -c "$diskfs" | awk '{print $1}')
+  [ "$diskfs_size" -gt "$rd_root_size" ] && err "ramdisk too small $(printf '%x' "$diskfs_size") $(printf '%x' "$rd_root_size")"
+fi
+
+dd of="$kernel" bs=1 seek=$((offset + image_off)) count="$rd_root_size" conv=notrunc "$@"
