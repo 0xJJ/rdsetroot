@@ -31,7 +31,7 @@ usage(){
   err      "       $progname [-dx] kernel [disk.fs]";
 }
 
-while getopts "dsx" opt; do
+while getopts "dsx" opt 2>/dev/null; do
   case $opt in
     d) debug=1 ;;
     s) sflag=1 ;;
