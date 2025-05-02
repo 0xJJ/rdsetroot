@@ -1,0 +1,19 @@
+# Maintainer: Johannes Janssen <0xJJ@hanni.dev>
+pkgname="rdsetroot"
+pkgver=0.1
+pkgrel=1
+pkgdesc="rdsetroot inserts disk images into OpenBSD RAMDISK kernels"
+arch=('any')
+url="https://github.com/0xJJ/rdsetroot"
+license=('ISC')
+depends=('awk'
+         'binutils' # readelf
+         'sh'
+)
+source=("${url}/archive/refs/tags/v${pkgver}.tar.gz")
+sha256sums=('e792b656b084f0d4a1a101fe0f51627a257dd8d81d991250d8235eb36ace19c8')
+
+package() {
+	cd "${pkgname}-${pkgver}"
+	make DESTDIR="${pkgdir}" install
+}
