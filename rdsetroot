@@ -102,8 +102,9 @@ if [ -n "$sflag" ]; then
     exit 0
 fi
 
-diskfs="$1"; shift
+diskfs="$1"
 # set dd arguments via $@
+set --
 [ -z "$debug" ] && set -- status=none
 
 # -x: extract the ramdisk
