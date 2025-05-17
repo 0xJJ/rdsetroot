@@ -21,14 +21,14 @@
 # SPDX-License-Identifier: ISC
 
 err(){
-  >&2 echo "$@"
+  >&2 printf '%s\n' "$@"
   exit 1
 }
 
 usage(){
   progname=$(basename "$0");
-  >&2 echo "usage: $progname -s kernel";
-  err      "       $progname [-dx] kernel [disk.fs]";
+  >&2 printf '%s\n' "usage: $progname -s kernel";
+  err               "       $progname [-dx] kernel [disk.fs]";
 }
 
 while getopts "dsx" opt 2>/dev/null; do
@@ -48,14 +48,14 @@ kernel="$1"; shift
 
 # Find rd_root_image and rd_root_size virtual addresses
 rd_root_image_addr=$(readelf -s "$kernel" | awk '/rd_root_image$/ {printf "0x%s", $2}')
-[ -z "$rd_root_image_addr" ] && err "no rd_root_image symbols?"
+[ -z "$rd_root_image_addr" ] && err 'no rd_root_image symbols?'
 
 rd_root_size_addr=$(readelf -s "$kernel" | awk '/rd_root_size$/ {printf "0x%s", $2}')
-[ -z "$rd_root_size_addr" ] && err "no rd_root_size symbols?";
+[ -z "$rd_root_size_addr" ] && err 'no rd_root_size symbols?';
 
 if [ -n "$debug" ]; then
-  >&2 echo "rd_root_size_addr = 0x$(printf '%x' "$rd_root_size_addr")"
-  >&2 echo "rd_root_image_addr = 0x$(printf '%x' "$rd_root_image_addr")"
+  >&2 printf 'rd_root_size_addr = 0x%x\n' "$rd_root_size_addr"
+  >&2 printf 'rd_root_image_addr = 0x%x\n' "$rd_root_image_addr"
 fi
 
 
@@ -85,20 +85,18 @@ while read -r offset vaddr paddr filesz; do
 done < "$tmp"
 
 if [ -n "$debug" ]; then
-  # >&2 echo "offset = 0x$(printf '%x' "$offset")"
-  # >&2 echo "filesz = 0x$(printf '%x' "$filesz")"
-  >&2 echo "rd_root_size_off = 0x$(printf '%x' "$size_off")"
-  >&2 echo "rd_root_image_off = 0x$(printf '%x' "$image_off")"
+  >&2 printf 'rd_root_size_off = 0x%x\n' "$size_off"
+  >&2 printf 'rd_root_image_off = 0x%x\n' "$image_off"
 fi
 
 # read rd_root_size value
 rd_root_size=$(dd if="$kernel" bs=1 skip=$((offset + size_off)) count=4 2>/dev/null | od -An -t u4 | tr -d ' ')
-[ -z "$rd_root_size" ] && err "Cannot read rd_root_size!"
-[ -n "$debug" ] && >&2 echo "rd_root_size  val: 0x$(printf '%x' "$rd_root_size")"
+[ -z "$rd_root_size" ] && err 'Cannot read rd_root_size!'
+[ -n "$debug" ] && >&2 printf 'rd_root_size  val: 0x%x\n' "$rd_root_size"
 
 # -s: print the size
 if [ -n "$sflag" ]; then
-    echo "$rd_root_size"
+    printf '%u\n' "$rd_root_size"
     exit 0
 fi
 
